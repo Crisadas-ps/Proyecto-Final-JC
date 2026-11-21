@@ -1,6 +1,6 @@
 # ElectroFix — Proyecto final JC
 
-Aplicación web académica para un emprendimiento de mantenimiento, diagnóstico y pedidos de repuestos electrónicos.
+Aplicación web para un emprendimiento de mantenimiento, diagnóstico y pedidos de repuestos electrónicos.
 
 ## Módulos del proyecto
 - Sitio público con presentación del negocio y servicios.
@@ -11,7 +11,7 @@ Aplicación web académica para un emprendimiento de mantenimiento, diagnóstico
 - Backend Node.js + Express y persistencia MongoDB.
 
 ## Tecnologías
-Node.js, Express, MongoDB, Mongoose, HTML, CSS y JavaScript. Para autenticación se utiliza bcrypt y sesiones de servidor.
+Node.js, Express, MongoDB, Mongoose, HTML, CSS, JavaScript y React.
 
 ## Ejecutar localmente
 1. Instalar Node.js 20 o superior y MongoDB (Atlas o local).
@@ -21,10 +21,10 @@ Node.js, Express, MongoDB, Mongoose, HTML, CSS y JavaScript. Para autenticación
 5. Ejecutar `npm run create-admin` para crear el usuario administrador.
 6. Ejecutar `npm run dev` y abrir `http://localhost:3000`.
 
-## Seguridad
-No subir el archivo `.env`, contraseñas, tokens ni claves API. Configurar secretos desde las variables del entorno del hosting. El backend debe publicarse en un servicio compatible con Node.js; GitHub Pages por sí solo no ejecuta Express ni conecta a MongoDB.
-
 ## Documentación
-Consulta `docs/` para arquitectura, endpoints, configuración y guía de pruebas.
+Si quieren saber mas consulten `docs/` para arquitectura y configuración.
 
-> Proyecto académico. Antes de usar datos reales, se deben revisar privacidad, consentimiento, copias de seguridad y configuración de producción.
+## Proyecto creado por:
+-Amy Cruz.
+-Cristhian Sanchez.
+
