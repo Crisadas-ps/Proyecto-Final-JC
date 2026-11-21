@@ -1,5 +1,20 @@
+# Dependencias
 node_modules/
+frontend/node_modules/
+backend/node_modules/
+
+# Variables privadas
 .env
+.env.*
+!.env.example
+
+# Archivos generados
+frontend/dist/
+coverage/
+
+# Archivos temporales
 .DS_Store
 npm-debug.log*
-coverage/
+
+# Copia antigua del servidor
+backend/server original.js

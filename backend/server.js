@@ -1,3 +1,5 @@
+import dns from 'node:dns';
+dns.setServers(['1.1.1.1', '8.8.8.8']);
 import 'dotenv/config';
 import express from 'express';
 import mongoose from 'mongoose';
@@ -6,7 +8,6 @@ import MongoStore from 'connect-mongo';
 import bcrypt from 'bcryptjs';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import OpenAI from 'openai';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
@@ -17,9 +18,8 @@ import User from './models/User.js';
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 const here = path.dirname(fileURLToPath(import.meta.url));
-const frontend = path.resolve(here, '../frontend');
+const frontend = path.resolve(here, '../frontend/dist');
 const isProduction = process.env.NODE_ENV === 'production';
-const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 
 if (!process.env.MONGODB_URI) throw new Error('Configura MONGODB_URI en backend/.env');
 if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32) {
@@ -57,7 +57,12 @@ function cleanString(value, max) {
   return typeof value === 'string' ? value.trim().slice(0, max) : '';
 }
 
-app.get('/api/health', (_req, res) => res.json({ ok: true, database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected', aiConfigured: Boolean(openai) }));
+app.get('/api/health', (_req, res) => res.json({
+  ok: true,
+  database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+  aiConfigured: false,
+  assistantConfigured: true
+}));
 
 app.get('/api/products', async (_req, res) => {
   try {
@@ -140,23 +145,116 @@ app.patch('/api/admin/requests/:id/status', requireAdmin, async (req, res) => {
   }
 });
 
-app.post('/api/ai', async (req, res) => {
+
+function normalizeText(value) {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+function getAssistantAnswer(message) {
+  const text = normalizeText(message);
+
+  const has = (...words) => words.some(word => text.includes(word));
+
+  if (has('hola', 'buenas', 'buenos dias', 'buenas tardes', 'buenas noches')) {
+    return '¡Hola! Bienvenido a ElectroFix. Puedo ayudarte con problemas de laptops, computadores y celulares, además de nuestros servicios y repuestos. ¿Qué necesitas consultar?';
+  }
+
+  if (has('precio', 'cuanto cuesta', 'cuanto vale', 'costo', 'cotizacion')) {
+    return 'Los precios dependen del tipo de dispositivo y del problema que presente. Puedes revisar nuestro catálogo de repuestos o enviar una solicitud de atención para recibir una evaluación y cotización.';
+  }
+
+  if (has('servicio', 'que ofrecen', 'que hacen', 'que realizan')) {
+    return 'En ElectroFix ofrecemos tres servicios principales:\n\n1. Mantenimiento preventivo.\n2. Reparación y diagnóstico.\n3. Pedido de repuestos.\n\nPuedes seleccionar el servicio que necesites en nuestro formulario de atención.';
+  }
+
+  if (has('mantenimiento', 'limpieza', 'polvo', 'limpiar')) {
+    return 'El mantenimiento preventivo ayuda a conservar tus dispositivos en buen estado. Puede incluir limpieza externa, revisión del sistema de ventilación y comprobación general del funcionamiento. Te recomendamos solicitar una evaluación técnica para determinar qué necesita tu equipo.';
+  }
+
+  if (has('calienta', 'calentamiento', 'temperatura', 'sobrecalienta', 'calor')) {
+    return 'El calentamiento excesivo puede estar relacionado con ventilación obstruida, acumulación de polvo o una carga elevada de trabajo. Coloca el equipo sobre una superficie firme y ventilada. Si continúa calentándose, solicita un diagnóstico técnico. No intentes abrirlo ni manipular sus componentes internos.';
+  }
+
+  if (has('lenta', 'lento', 'lentitud', 'se traba', 'congelada', 'congelado')) {
+    return 'Si tu equipo está lento, algunas posibles causas son demasiados programas abiertos, poco espacio de almacenamiento o aplicaciones que consumen muchos recursos. Puedes reiniciarlo y cerrar los programas que no estés utilizando. Si el problema continúa, podemos ayudarte con un diagnóstico.';
+  }
+
+  if (has('bateria', 'no carga', 'carga', 'cargador')) {
+    return 'Los problemas de carga pueden estar relacionados con el cargador, el cable, el puerto o la batería. Comprueba que el cargador no tenga daños visibles y prueba una toma de corriente diferente. Si la batería está hinchada, caliente o dañada, deja de utilizar el dispositivo y solicita asistencia técnica. No intentes manipularla.';
+  }
+
+  if (has('pantalla', 'display', 'imagen', 'no enciende la pantalla')) {
+    return 'Los problemas de pantalla pueden deberse a fallos de conexión, daños del panel o problemas del sistema. ¿La pantalla está completamente negra, presenta líneas o enciende pero no muestra imagen? Con esa información podremos orientarte mejor.';
+  }
+
+  if (has('virus', 'malware', 'publicidad', 'anuncios', 'ventanas emergentes')) {
+    return 'La aparición de publicidad no deseada o comportamientos extraños puede estar relacionada con programas no deseados o software malicioso. Evita instalar aplicaciones de fuentes desconocidas y realiza un análisis con una herramienta de seguridad confiable. Si el problema continúa, podemos revisar tu equipo.';
+  }
+
+  if (has('repuesto', 'repuestos', 'pieza', 'piezas', 'componente', 'componentes')) {
+    return '¡Claro! Contamos con un catálogo de repuestos. Para orientarte sobre la compatibilidad necesitamos conocer la marca y el modelo exacto de tu dispositivo. Puedes consultar el catálogo o seleccionar "Pedido de repuestos" en el formulario.';
+  }
+
+  if (has('compatibilidad', 'compatible', 'modelo')) {
+    return 'Para comprobar la compatibilidad de un repuesto necesitamos conocer la marca, el modelo exacto y, cuando sea posible, la referencia de la pieza. No podemos garantizar compatibilidad sin verificar esos datos.';
+  }
+
+  if (has('celular', 'telefono', 'movil', 'smartphone')) {
+    return 'Podemos orientarte sobre problemas comunes de celulares, como fallos de carga, pantalla, rendimiento y batería. Cuéntame la marca, el modelo y qué problema presenta.';
+  }
+
+  if (has('laptop', 'portatil', 'computadora', 'computador', 'pc', 'ordenador')) {
+    return 'Podemos orientarte sobre laptops y computadores con problemas de rendimiento, temperatura, pantalla, almacenamiento y otros inconvenientes. Cuéntame la marca, el modelo y qué está sucediendo.';
+  }
+
+  if (has('garantia', 'garantias')) {
+    return 'Las condiciones de garantía deben confirmarse según el servicio o repuesto solicitado. Nuestro personal técnico podrá proporcionarte esa información durante la atención.';
+  }
+
+  if (has('horario', 'horarios', 'atienden', 'abierto', 'ubicacion', 'direccion')) {
+    return 'Puedes enviar solicitudes de atención desde nuestra página web en cualquier momento. Los horarios de atención presencial deben confirmarse directamente con el personal de ElectroFix.';
+  }
+
+  if (has('gracias', 'muchas gracias')) {
+    return '¡Con gusto! Gracias por confiar en ElectroFix. Estamos aquí para ayudarte con tus dispositivos.';
+  }
+
+  if (has('adios', 'hasta luego', 'chao')) {
+    return '¡Hasta pronto! Gracias por visitar ElectroFix. Recuerda que puedes enviar una solicitud de atención cuando lo necesites.';
+  }
+
+  return 'Quiero ayudarte con tu consulta, pero necesito un poco más de información. Cuéntame qué dispositivo tienes, su marca y modelo, y qué problema presenta. También puedes preguntarme sobre mantenimiento, reparaciones o repuestos.';
+}
+
+app.post('/api/ai', (req, res) => {
   const message = req.body?.message;
-  if (typeof message !== 'string' || !message.trim() || message.length > 2000) return res.status(400).json({ error: 'Escribe una consulta de hasta 2000 caracteres.' });
-  if (!openai) return res.status(503).json({ error: 'ElectroFix AI no está configurado. Puedes usar el resto del sitio.' });
-  try {
-    const result = await openai.responses.create({
-      model: process.env.OPENAI_MODEL || 'gpt-5.5',
-      instructions: 'Eres ElectroFix AI. Responde en español, con claridad y brevedad. ElectroFix ofrece mantenimiento preventivo, diagnóstico y reparación de laptops, PC y celulares, además de pedidos de repuestos. Los precios del catálogo son referenciales; nunca inventes stock, compatibilidad, garantía ni plazos. Solicita marca y modelo para orientar sobre compatibilidad. No indiques abrir fuentes de poder, manipular baterías dañadas ni trabajar con equipos conectados a la corriente. No afirmes que puedes consultar solicitudes ni datos privados.',
-      input: message.trim(),
-      max_output_tokens: 450
+
+  if (
+    typeof message !== 'string' ||
+    !message.trim() ||
+    message.length > 2000
+  ) {
+    return res.status(400).json({
+      error: 'Escribe una consulta de hasta 2000 caracteres.'
     });
-    const answer = result.output_text?.trim();
-    if (!answer) return res.status(502).json({ error: 'No se recibió respuesta de la IA.' });
-    res.json({ success: true, answer });
+  }
+
+  try {
+    const answer = getAssistantAnswer(message.trim());
+
+    return res.json({
+      success: true,
+      answer
+    });
   } catch (error) {
-    console.error('OpenAI:', error.status, error.message);
-    res.status(502).json({ error: error.status === 401 ? 'La clave de IA no fue aceptada.' : error.status === 429 ? 'Se alcanzó el límite de uso de IA.' : 'No se pudo conectar con la IA.' });
+    console.error('Assistant:', error.message);
+
+    return res.status(500).json({
+      error: 'No se pudo procesar tu consulta.'
+    });
   }
 });
 
@@ -171,5 +269,4 @@ app.use((error, _req, res, _next) => {
 
 app.listen(PORT, () => {
   console.log(`ElectroFix disponible en http://localhost:${PORT}`);
-  if (!openai) console.log('Aviso: ElectroFix AI no está configurado (opcional).');
 });

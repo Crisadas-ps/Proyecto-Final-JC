@@ -4,7 +4,9 @@ import bcrypt from 'bcryptjs';
 import { createInterface } from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import User from '../models/User.js';
+import dns from 'node:dns';
 
+dns.setServers(['1.1.1.1', '8.8.8.8']);
 if (!process.env.MONGODB_URI) throw new Error('Falta MONGODB_URI en backend/.env');
 const rl = createInterface({ input, output });
 try {
